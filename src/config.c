@@ -4,9 +4,7 @@
  * Format: one "key = value" per line, '#' starts a comment.
  *
  *   host          = 192.168.0.100
- *   port          = 23
- *   prompt        = SGI-L2-001-L2>
- *   eol           = lf | crlf | cr
+ *   port          = 8000
  *   timeout       = 30
  *   sort          = desc | asc | custom
  *   sortorder     = 001c01 001c02 001r20
@@ -26,8 +24,7 @@
 void cfg_defaults(AppConfig *c)
 {
     memset(c, 0, sizeof(*c));
-    c->port = 23;
-    c->eol = EOL_LF;
+    c->port = CFG_DEFAULT_PORT;
     c->timeout = 30;
     c->sortMode = L2_SORT_DESC;
     c->refresh = 0;
@@ -44,23 +41,11 @@ const char *cfg_default_path(void)
     return path;
 }
 
-const char *cfg_eol_string(int eol)
-{
-    if (eol == EOL_CRLF) return "\r\n";
-    if (eol == EOL_CR) return "\r";
-    return "\n";
-}
-
 static void set_key(AppConfig *c, const char *key, const char *val)
 {
     if (s_equal_ci(key, "host")) s_copy(c->host, val, sizeof(c->host));
-    else if (s_equal_ci(key, "port")) c->port = atoi(val) > 0 ? atoi(val) : 23;
-    else if (s_equal_ci(key, "prompt")) s_copy(c->prompt, val, sizeof(c->prompt));
-    else if (s_equal_ci(key, "eol")) {
-        if (s_equal_ci(val, "crlf")) c->eol = EOL_CRLF;
-        else if (s_equal_ci(val, "cr")) c->eol = EOL_CR;
-        else c->eol = EOL_LF;
-    } else if (s_equal_ci(key, "timeout")) c->timeout = atoi(val) > 0 ? atoi(val) : 30;
+    else if (s_equal_ci(key, "port")) c->port = atoi(val) > 0 ? atoi(val) : CFG_DEFAULT_PORT;
+    else if (s_equal_ci(key, "timeout")) c->timeout = atoi(val) > 0 ? atoi(val) : 30;
     else if (s_equal_ci(key, "sort")) {
         if (s_equal_ci(val, "asc")) c->sortMode = L2_SORT_ASC;
         else if (s_equal_ci(val, "custom")) c->sortMode = L2_SORT_CUSTOM;
@@ -101,10 +86,6 @@ int cfg_save(const AppConfig *c, const char *path)
     fprintf(f, "# SGI-L2-GUI settings\n");
     fprintf(f, "host          = %s\n", c->host);
     fprintf(f, "port          = %d\n", c->port);
-    fprintf(f, "# exact L2 prompt, leave empty to auto detect\n");
-    fprintf(f, "prompt        = %s\n", c->prompt);
-    fprintf(f, "eol           = %s\n",
-            c->eol == EOL_CRLF ? "crlf" : (c->eol == EOL_CR ? "cr" : "lf"));
     fprintf(f, "timeout       = %d\n", c->timeout);
     fprintf(f, "sort          = %s\n",
             c->sortMode == L2_SORT_ASC ? "asc" :

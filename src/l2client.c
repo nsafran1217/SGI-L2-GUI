@@ -1,5 +1,5 @@
 /*
- * l2client.c - asynchronous L2 command queue on top of telnet.c
+ * l2client.c - asynchronous L2 command queue on top of l2net.c
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +8,8 @@
 #include <X11/Intrinsic.h>
 
 #include "l2client.h"
-#include "telnet.h"
+#include "l2net.h"
+#include "l2proto.h"
 #include "demo.h"
 #include "util.h"
 
@@ -92,38 +93,43 @@ static void fail_all(const char *err)
 static void dead_connection(void)
 {
     remove_input();
-    tn_close();
+    l2n_close();
 }
 
 static void on_input(XtPointer cd, int *fd, XtInputId *id)
 {
-    int rc;
-    char *resp;
+    int rc, irerr;
+    char *resp, msg[200];
     (void)cd;
     (void)fd;
     (void)id;
 
-    rc = tn_pump();
+    rc = l2n_pump();
     if (!running) {
-        /* idle: unsolicited output or the L2 closed the session */
-        if (rc == TN_EOF || !tn_connected()) {
+        /* idle: the L2 closed the session */
+        if (rc == L2N_EOF || !l2n_connected()) {
             dead_connection();
             status("L2 closed the idle connection (reconnects on demand)", 0);
         }
         return;
     }
-    if (rc == TN_AGAIN) return;
-    if (rc == TN_DONE) {
-        resp = tn_take_response(head->cmd);
-        if (!tn_connected()) dead_connection();
-        finish(1, resp);
+    if (rc == L2N_AGAIN) return;
+    if (rc == L2N_DONE) {
+        resp = l2n_take_response(&irerr);
+        if (!l2n_connected()) dead_connection();
+        if (irerr) {
+            sprintf(msg, "L2 error %d: %s", irerr, l2p_err_text(irerr));
+            finish(0, msg);
+        } else {
+            finish(1, resp);
+        }
         free(resp);
         return;
     }
     /* EOF while running: retry once on a fresh connection */
     dead_connection();
     remove_timer();
-    if (head && !head->retried && tn_raw()[0] == '\0') {
+    if (head && !head->retried && !l2n_rx_since_begin()) {
         head->retried = 1;
         running = 0;
         dispatch();
@@ -140,26 +146,22 @@ static void on_timeout(XtPointer cd, XtIntervalId *id)
     if (!running) return;
     /* the session is out of sync now - start fresh next time */
     dead_connection();
-    finish(0, "Timeout waiting for the L2 prompt");
+    finish(0, "Timeout waiting for the L2");
 }
 
 static int ensure_connected(void)
 {
     char err[256], msg[400];
-    if (tn_connected()) return 1;
+    if (l2n_connected()) return 1;
 
     sprintf(msg, "Connecting to %.200s ...", cfg->host);
     status(msg, 1);
-    tn_set_prompt(cfg->prompt);
-    tn_set_eol(cfg_eol_string(cfg->eol));
-    if (tn_connect(cfg->host, cfg->port, 5000, err, sizeof(err)) < 0 ||
-        tn_sync_prompt(5000, err, sizeof(err)) < 0) {
-        tn_close();
+    if (l2n_connect(cfg->host, cfg->port, 5000, err, sizeof(err)) < 0) {
         sprintf(msg, "Connect to %.100s failed: %.250s", cfg->host, err);
         fail_all(msg);
         return 0;
     }
-    input_id = XtAppAddInput(app, tn_fd(), (XtPointer)XtInputReadMask, on_input, NULL);
+    input_id = XtAppAddInput(app, l2n_fd(), (XtPointer)XtInputReadMask, on_input, NULL);
     input_active = 1;
     sprintf(msg, "Connected to %.200s", cfg->host);
     status(msg, 1);
@@ -181,7 +183,8 @@ static void demo_reply(XtPointer cd, XtIntervalId *id)
 
 static void do_dispatch(XtPointer cd, XtIntervalId *id)
 {
-    char msg[300];
+    char msg[300], *resp;
+    int rc, irerr;
     (void)cd;
     (void)id;
     dispatch_scheduled = 0;
@@ -199,7 +202,8 @@ static void do_dispatch(XtPointer cd, XtIntervalId *id)
     sprintf(msg, "L2: %.250s", head->cmd);
     status(msg, 1);
     running = 1;
-    if (tn_begin(head->cmd) < 0) {
+    rc = l2n_begin(head->cmd);
+    if (rc == L2N_EOF) {
         dead_connection();
         running = 0;
         if (!head->retried) {
@@ -208,6 +212,12 @@ static void do_dispatch(XtPointer cd, XtIntervalId *id)
         } else {
             finish(0, "Could not send command to L2");
         }
+        return;
+    }
+    if (rc == L2N_DONE) {           /* no response will come (reboot) */
+        resp = l2n_take_response(&irerr);
+        finish(1, resp);
+        free(resp);
         return;
     }
     timer_id = XtAppAddTimeOut(app, (unsigned long)cfg->timeout * 1000UL, on_timeout, NULL);
@@ -252,7 +262,7 @@ int l2c_pending(void)
 
 int l2c_connected(void)
 {
-    return demo || tn_connected();
+    return demo || l2n_connected();
 }
 
 void l2c_disconnect(void)
@@ -268,5 +278,5 @@ void l2c_disconnect(void)
 
 const char *l2c_prompt(void)
 {
-    return demo ? "L2-demo>" : tn_get_prompt();
+    return demo ? "L2-demo>" : "L2>";
 }

@@ -25,7 +25,7 @@
 #include "l2client.h"
 #include "l2parse.h"
 #include "rack.h"
-#include "telnet.h"
+#include "l2net.h"
 #include "demo.h"
 #include "util.h"
 
@@ -492,27 +492,20 @@ static int cli_connect(void)
 {
     char err[256];
     if (g_demo) return 1;
-    tn_set_prompt(g_cfg.prompt);
-    tn_set_eol(cfg_eol_string(g_cfg.eol));
-    if (tn_connect(g_cfg.host, g_cfg.port, 5000, err, sizeof(err)) < 0 ||
-        tn_sync_prompt(5000, err, sizeof(err)) < 0) {
-        fprintf(stderr, "sgil2gui: %s\n", err);
+    if (l2n_connect(g_cfg.host, g_cfg.port, 5000, err, sizeof(err)) < 0) {
+        fprintf(stderr, "sgil2gui: %s:%d: %s\n", g_cfg.host, g_cfg.port, err);
         return 0;
     }
-    fprintf(stderr, "sgil2gui: connected, prompt \"%s\"\n", tn_get_prompt());
+    fprintf(stderr, "sgil2gui: connected to %s:%d\n", g_cfg.host, g_cfg.port);
     return 1;
 }
 
 static char *cli_exec(const char *cmd)
 {
-    char *out = NULL;
-    int rc;
+    char *out = NULL, err[256];
     if (g_demo) return demo_exec(cmd);
-    rc = tn_exec(cmd, g_cfg.timeout * 1000, &out);
-    if (rc != TN_DONE) {
-        fprintf(stderr, "sgil2gui: '%s' failed (%s)\n", cmd,
-                rc == TN_TIMEOUT ? "timeout" : "connection closed");
-        fprintf(stderr, "--- raw data received ---\n%s\n---\n", tn_raw());
+    if (l2n_exec(cmd, g_cfg.timeout * 1000, &out, err, sizeof(err)) < 0) {
+        fprintf(stderr, "sgil2gui: '%s' failed: %s\n", cmd, err);
         return NULL;
     }
     return out;
@@ -530,9 +523,9 @@ static int cli_main(const char *cmd, int summary)
     if (!summary) {
         disp = cli_exec(cmd);
         if (!disp) return 1;
-        printf("%s\n", disp);
+        fputs(disp, stdout);
         free(disp);
-        tn_close();
+        l2n_close();
         return 0;
     }
     disp = cli_exec("display");
@@ -552,7 +545,7 @@ static int cli_main(const char *cmd, int summary)
     }
     free(disp);
     free(brk);
-    if (!g_demo) tn_close();
+    if (!g_demo) l2n_close();
     return 0;
 }
 
@@ -565,8 +558,7 @@ static void usage(void)
     fprintf(stderr,
         "usage: sgil2gui [options] [X toolkit options]\n"
         "  -host <name>     L2 controller host name or IP\n"
-        "  -port <n>        telnet port (default 23)\n"
-        "  -prompt <str>    exact L2 prompt (default: auto detect)\n"
+        "  -port <n>        the L2's client port (default 8000)\n"
         "  -config <file>   settings file (default ~/.sgil2guirc)\n"
         "  -demo            run against the built-in L2 simulator\n"
         "  -cmd <command>   run one L2 command, print the output, exit (no X)\n"
@@ -582,7 +574,7 @@ int main(int argc, char **argv)
     const char *cli_cmd = NULL;
     int cli_summary = 0;
     int i, j, w, h, sh;
-    char *host = NULL, *port = NULL, *prompt = NULL;
+    char *host = NULL, *port = NULL;
     RackFonts fonts;
     Arg a[4];
     int n;
@@ -592,7 +584,6 @@ int main(int argc, char **argv)
     for (i = 1, j = 1; i < argc; i++) {
         if (strcmp(argv[i], "-host") == 0 && i + 1 < argc) host = argv[++i];
         else if (strcmp(argv[i], "-port") == 0 && i + 1 < argc) port = argv[++i];
-        else if (strcmp(argv[i], "-prompt") == 0 && i + 1 < argc) prompt = argv[++i];
         else if (strcmp(argv[i], "-config") == 0 && i + 1 < argc)
             s_copy(g_cfgpath, argv[++i], sizeof(g_cfgpath));
         else if (strcmp(argv[i], "-cmd") == 0 && i + 1 < argc) cli_cmd = argv[++i];
@@ -609,8 +600,7 @@ int main(int argc, char **argv)
     cfg_defaults(&g_cfg);
     cfg_load(&g_cfg, g_cfgpath);
     if (host) s_copy(g_cfg.host, host, sizeof(g_cfg.host));
-    if (port) g_cfg.port = atoi(port) > 0 ? atoi(port) : 23;
-    if (prompt) s_copy(g_cfg.prompt, prompt, sizeof(g_cfg.prompt));
+    if (port) g_cfg.port = atoi(port) > 0 ? atoi(port) : CFG_DEFAULT_PORT;
 
     if (cli_cmd || cli_summary) return cli_main(cli_cmd, cli_summary);
 

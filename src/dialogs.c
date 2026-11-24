@@ -575,8 +575,8 @@ void dlg_rackinfo(void)
 /* settings                                                            */
 /* ------------------------------------------------------------------ */
 
-static Widget st_form, st_host, st_port, st_prompt, st_timeout, st_refresh, st_order;
-static Widget st_crlf, st_asc, st_custom, st_ralt, st_grey, st_confirm;
+static Widget st_form, st_host, st_port, st_timeout, st_refresh, st_order;
+static Widget st_asc, st_custom, st_ralt, st_grey, st_confirm;
 
 static Widget st_field(Widget grid, const char *lbl, const char *name, const char *val)
 {
@@ -603,22 +603,19 @@ static void st_apply(int save)
 
     st_get(st_host, c.host, sizeof(c.host));
     st_get(st_port, tmp, sizeof(tmp));
-    c.port = atoi(tmp) > 0 ? atoi(tmp) : 23;
-    st_get(st_prompt, c.prompt, sizeof(c.prompt));
+    c.port = atoi(tmp) > 0 ? atoi(tmp) : CFG_DEFAULT_PORT;
     st_get(st_timeout, tmp, sizeof(tmp));
     c.timeout = atoi(tmp) > 0 ? atoi(tmp) : 30;
     st_get(st_refresh, tmp, sizeof(tmp));
     c.refresh = atoi(tmp) > 0 ? atoi(tmp) : 0;
     st_get(st_order, c.sortOrder, sizeof(c.sortOrder));
-    c.eol = XmToggleButtonGetState(st_crlf) ? EOL_CRLF : EOL_LF;
     if (XmToggleButtonGetState(st_custom)) c.sortMode = L2_SORT_CUSTOM;
     else c.sortMode = XmToggleButtonGetState(st_asc) ? L2_SORT_ASC : L2_SORT_DESC;
     c.routerAltix = XmToggleButtonGetState(st_ralt) ? 1 : 0;
     c.altix350Grey = XmToggleButtonGetState(st_grey) ? 1 : 0;
     c.confirmPower = XmToggleButtonGetState(st_confirm) ? 1 : 0;
 
-    reconnect = strcmp(c.host, g_cfg.host) != 0 || c.port != g_cfg.port ||
-                strcmp(c.prompt, g_cfg.prompt) != 0 || c.eol != g_cfg.eol;
+    reconnect = strcmp(c.host, g_cfg.host) != 0 || c.port != g_cfg.port;
     g_cfg = c;
     if (save) {
         if (!cfg_save(&g_cfg, g_cfgpath)) {
@@ -681,11 +678,11 @@ void dlg_settings(void)
                                   XmNbottomOffset, 6,
                                   NULL);
 
-    label(col, "sectionLabel", "L2 controller connection (telnet)");
+    label(col, "sectionLabel", "L2 controller connection");
     grid = XtVaCreateManagedWidget("grid", xmRowColumnWidgetClass, col,
                                    XmNorientation, XmHORIZONTAL,
                                    XmNpacking, XmPACK_COLUMN,
-                                   XmNnumColumns, 6,
+                                   XmNnumColumns, 5,
                                    XmNisAligned, True,
                                    XmNentryAlignment, XmALIGNMENT_END,
                                    NULL);
@@ -693,8 +690,7 @@ void dlg_settings(void)
     sprintf(timeout, "%d", g_cfg.timeout);
     sprintf(refresh, "%d", g_cfg.refresh);
     st_host = st_field(grid, "L2 host / IP:", "host", g_cfg.host);
-    st_port = st_field(grid, "Telnet port:", "port", port);
-    st_prompt = st_field(grid, "L2 prompt (empty = detect):", "prompt", g_cfg.prompt);
+    st_port = st_field(grid, "L2 port (8000):", "port", port);
     st_timeout = st_field(grid, "Command timeout (s):", "timeout", timeout);
     st_refresh = st_field(grid, "Auto refresh (s, 0 = off):", "refresh", refresh);
     st_order = st_field(grid, "Custom sort order:", "sortOrder", g_cfg.sortOrder);
@@ -702,7 +698,6 @@ void dlg_settings(void)
     frame = XtVaCreateManagedWidget("optionsFrame", xmFrameWidgetClass, col, NULL);
     opts = XtVaCreateManagedWidget("options", xmRowColumnWidgetClass, frame,
                                    XmNorientation, XmVERTICAL, NULL);
-    st_crlf = toggle(opts, "crlf", "Send CR+LF line endings (default: LF)", g_cfg.eol == EOL_CRLF);
     st_asc = toggle(opts, "ascending", "Sort bricks ascending (default: descending)",
                     g_cfg.sortMode == L2_SORT_ASC);
     st_custom = toggle(opts, "customSort", "Use custom sort order",

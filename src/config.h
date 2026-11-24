@@ -4,13 +4,11 @@
 #ifndef SGIL2_CONFIG_H
 #define SGIL2_CONFIG_H
 
-enum { EOL_LF = 0, EOL_CRLF, EOL_CR };
+#define CFG_DEFAULT_PORT 8000
 
 typedef struct {
     char host[128];
-    int  port;
-    char prompt[64];        /* empty = auto detect after connect */
-    int  eol;               /* line ending sent after commands */
+    int  port;              /* L2's client port: 8000 (8002: not logged) */
     int  timeout;           /* command timeout in seconds */
     int  sortMode;          /* L2_SORT_* */
     char sortOrder[512];    /* custom order, space separated brick ids */
@@ -25,6 +23,5 @@ void        cfg_defaults(AppConfig *c);
 int         cfg_load(AppConfig *c, const char *path);
 int         cfg_save(const AppConfig *c, const char *path);
 const char *cfg_default_path(void);
-const char *cfg_eol_string(int eol);
 
 #endif

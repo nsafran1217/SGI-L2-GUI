@@ -4,7 +4,7 @@ Based on [SGI-L2-WUI](https://github.com/flexion-unity/SGI-L2-WUI) by flexion, c
 
 `sgil2gui` is a native IRIX 6.5 / Motif application for the SGI L2 system controller. 
 
-* talks over telnet to your L2 controller
+* talks to your L2 controller over its client protocol (TCP port 8000)
 * renders the server rack inventory in the GUI
 * shows LCD text, power / attention / failure LEDs of every brick
 * power up / down the whole rack or single bricks
@@ -37,7 +37,6 @@ make install    # as root: /usr/local/bin/sgil2gui + app-defaults
 sgil2gui                                 # launch GUI. uses ~/.sgil2guirc
 
 sgil2gui -host 192.168.0.100             # override the L2 host
-sgil2gui -host l2 -prompt "SGI-L2-001-L2>"
 sgil2gui -demo                           # built-in L2 simulator, no hardware
 ```
 
